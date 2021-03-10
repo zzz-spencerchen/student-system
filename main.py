@@ -2,16 +2,76 @@
     student system
 '''
 
+import json
+import os
+import logging
+
+
 from c4_1_source import students
 
 class NotArgError(Exception):
     def __init__(self, message):
         self.message = message
 
+class MissPathError(Exception):
+    def __init__(self, message):
+        self.message = message
+
+class FormatError(Exception):
+    def __init__(self, message):
+        self.message = message
+
 
 class StudentInfo(object):
-    def __init__(self, students):
-        self.students = students
+    def __init__(self, students_path, log_path):
+        self.students_path = students_path
+        self.log_path = log_path
+        self.log = self.__log()
+        self.__init_path()
+        self.__read()
+
+
+    def __log(self):
+        if os.path.exists(self.log_path):
+            mode = 'a'
+        else:
+            mode = 'w'
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='%(asctime)s-%(filename)s-%(lineno)d-%(levelname)s-%(message)s',
+            filename=self.log_path,
+            filemode=mode
+        )
+        return logging
+
+
+    def __init_path(self):
+        if not os.path.exists(self.students_path):
+            raise MissPathError('path %s no exist' % self.students_path)
+
+        if not os.path.isfile(self.students_path):
+            raise TypeError('students_path is not a file')
+
+        if not self.students_path.endswith('.json'):
+            raise FormatError('file type should be json')
+
+
+    def __read(self):
+        with open(self.students_path, 'r') as f:
+            try:
+                data = f.read()
+            except Exception as e:
+                raise e
+
+        self.students = json.loads(data)
+
+
+    def __save(self):
+        with open(self.students_path, 'w') as f:
+            json_data = json.dumps(self.students)
+            f.write(json_data)
+
+
 
     def get_user_by_id(self, student_id):
         return self.students.get(student_id)    # students is dict, get func is return value
@@ -30,6 +90,8 @@ class StudentInfo(object):
             raise e
 
         self.__add(**kw)
+        self.__save()
+        self.__read()
 
     def adds(self, new_students):
         for student in new_students:
@@ -40,10 +102,20 @@ class StudentInfo(object):
                 continue
 
             self.__add(**student)
+        self.__save()
+        self.__read()
 
     def __add(self, **kw):
-        new_id = max(self.students) + 1
+        if len(self.students) == 0:
+            new_id = 1
+        else:
+            keys = list(self.students.keys())
+            _key = []
+            for i in keys:
+                _key.append(int(i))
+            new_id = max(_key) + 1
         self.students[new_id] = kw
+        self.log.info('student %s has been registered' % (kw['name']))
 
 
     def delete_student(self, student_id):
@@ -52,6 +124,9 @@ class StudentInfo(object):
         else:
             user_info = self.students.pop(student_id)
             print('student number is{0}，student {1} has been deleted!'.format(student_id, user_info))
+            self.log.warning('student number is{0}，student {1} has been deleted!'.format(student_id, user_info))
+        self.__save()
+        self.__read()
 
     def deletes(self, ids):
         for id_ in ids:
@@ -60,6 +135,9 @@ class StudentInfo(object):
                 continue
             user_info = self.students.pop(id_)['name']
             print('student number is {0}，student {1} has been deleted!'.format(id_, user_info))
+            self.log.warning('student number is {0}，student {1} has been deleted!'.format(id_, user_info))
+        self.__save()
+        self.__read()
 
 
     def update_student(self, student_id, **kw):
@@ -73,7 +151,10 @@ class StudentInfo(object):
             raise e
 
         self.students[student_id] = kw
+        self.__save()
+        self.__read()
         print('student info has been updated successfully!')
+
 
     def updates(self, update_students):
         for student in update_students:
@@ -95,6 +176,8 @@ class StudentInfo(object):
                 continue
 
             self.students[id_] = user_info
+        self.__save()
+        self.__read()
         print('all info updated successfully!')
 
 
@@ -156,7 +239,7 @@ class StudentInfo(object):
 
 
 if __name__ == '__main__':
-    student_info = StudentInfo(students)
+    student_info = StudentInfo('students.json', 'students.log')
     user = student_info.get_user_by_id(1)
     print(user)
     student_info.add_students(name='GGG', sex='female', age=18, class_number='801')
@@ -168,12 +251,12 @@ if __name__ == '__main__':
     student_info.adds(users)
     student_info.get_all_students()
     print('**************')
-    student_info.deletes([7,8])
+    student_info.deletes(['7','8'])
     student_info.get_all_students()
     print('**************')
     student_info.updates([
-        {1: {'name': 'XXX', 'age': 80, 'class_number': '1501', 'sex': 'male'}},
-        {2: {'name': 'YYY', 'age': 80, 'class_number': '1501', 'sex': 'female'}}
+        {'1': {'name': 'XXX', 'age': 80, 'class_number': '1501', 'sex': 'male'}},
+        {'2': {'name': 'YYY', 'age': 80, 'class_number': '1501', 'sex': 'female'}}
     ])
     student_info.get_all_students()
     print('**************')
